@@ -1,5 +1,6 @@
 let allStores = [];
 let userLocation = null; // { lat: number, lng: number }
+let customLocation = null; // { lat: number, lng: number, name: string }
 
 // === GPS / 現在地・距離計算 ===
 function deg2rad(deg) {
@@ -19,10 +20,11 @@ function calculateDistanceKm(lat1, lon1, lat2, lon2) {
 }
 
 function getStoreDistance(store) {
-  if (!userLocation || !store || store.lat === null || store.lat === undefined || store.lng === null || store.lng === undefined) {
+  const baseLocation = customLocation || userLocation;
+  if (!baseLocation || !store || store.lat === null || store.lat === undefined || store.lng === null || store.lng === undefined) {
     return null;
   }
-  return calculateDistanceKm(userLocation.lat, userLocation.lng, parseFloat(store.lat), parseFloat(store.lng));
+  return calculateDistanceKm(baseLocation.lat, baseLocation.lng, parseFloat(store.lat), parseFloat(store.lng));
 }
 
 function formatDistance(distKm) {
@@ -31,6 +33,122 @@ function formatDistance(distKm) {
     return `${Math.round(distKm * 1000)}m`;
   }
   return `${distKm.toFixed(1)}km`;
+}
+
+// === 国土地理院 ジオコーディングAPIを利用した指定場所からの近い順検索 ===
+async function searchNearSpecifiedPlace() {
+  const searchInput = document.getElementById('searchInput');
+  const query = searchInput ? searchInput.value.trim() : '';
+
+  if (!query) {
+    showToast('🔍 場所名・駅名・地名を入力してください');
+    if (searchInput) searchInput.focus();
+    return;
+  }
+
+  const searchNearBtn = document.getElementById('searchNearBtn');
+  const originalBtnHtml = searchNearBtn ? searchNearBtn.innerHTML : '';
+  if (searchNearBtn) {
+    searchNearBtn.disabled = true;
+    searchNearBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[10px]"></i><span>検索中</span>';
+  }
+
+  try {
+    const encoded = encodeURIComponent(query);
+    const resp = await fetch(`https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encoded}`);
+    if (!resp.ok) throw new Error('Network response was not ok');
+    const data = await resp.json();
+
+    if (!data || data.length === 0) {
+      // APIで見つからない場合、店舗データの都道府県・市区町村・住所からの部分一致フォールバック検索
+      const matchedStore = allStores.find(s => 
+        (s['市区町村'] && s['市区町村'].includes(query)) ||
+        (s['住所'] && s['住所'].includes(query)) ||
+        (s['店舗名'] && s['店舗名'].includes(query))
+      );
+      if (matchedStore && matchedStore.lat && matchedStore.lng) {
+        setCustomLocation(parseFloat(matchedStore.lat), parseFloat(matchedStore.lng), query);
+        showToast(`📍「${query}」周辺から近い順に並び替えました！`);
+        return;
+      }
+      showToast(`⚠️「${query}」の位置情報が見つかりませんでした。別の名称（例: 新宿駅、秋葉原、横浜市など）でお試しください。`);
+      return;
+    }
+
+    const first = data[0];
+    const [lng, lat] = first.geometry.coordinates;
+
+    setCustomLocation(lat, lng, query);
+    showToast(`📍「${query}」から近い順に全店舗を並び替えました！`);
+  } catch (err) {
+    console.error('Geocoding error:', err);
+    // エラー時のフォールバック
+    const matchedStore = allStores.find(s => 
+      (s['市区町村'] && s['市区町村'].includes(query)) ||
+      (s['住所'] && s['住所'].includes(query))
+    );
+    if (matchedStore && matchedStore.lat && matchedStore.lng) {
+      setCustomLocation(parseFloat(matchedStore.lat), parseFloat(matchedStore.lng), query);
+      showToast(`📍「${query}」周辺から近い順に並び替えました！`);
+    } else {
+      showToast('⚠️ 場所の検索に失敗しました。電波環境を確認してください。');
+    }
+  } finally {
+    if (searchNearBtn) {
+      searchNearBtn.disabled = false;
+      searchNearBtn.innerHTML = originalBtnHtml;
+    }
+  }
+}
+
+// 検索入力欄での Enter キーハンドラ
+function handleSearchKeydown(event) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    searchNearSpecifiedPlace();
+  }
+}
+
+// 指定場所の設定と解除
+function setCustomLocation(lat, lng, name) {
+  customLocation = { lat, lng, name };
+
+  // バナー表示
+  const banner = document.getElementById('customLocationBanner');
+  const bannerName = document.getElementById('customLocationName');
+  if (banner && bannerName) {
+    bannerName.textContent = name;
+    banner.classList.remove('hidden');
+  }
+
+  // ソートセレクトを「custom_distance_asc」に設定して選択可能に
+  const sortSelect = document.getElementById('sortSelect');
+  if (sortSelect) {
+    const customOpt = sortSelect.querySelector('option[value="custom_distance_asc"]');
+    if (customOpt) customOpt.classList.remove('hidden');
+    sortSelect.value = 'custom_distance_asc';
+  }
+
+  renderStores();
+}
+
+function clearCustomLocation() {
+  customLocation = null;
+
+  // バナー非表示
+  const banner = document.getElementById('customLocationBanner');
+  if (banner) banner.classList.add('hidden');
+
+  // ソートセレクトを元に戻す
+  const sortSelect = document.getElementById('sortSelect');
+  if (sortSelect) {
+    const customOpt = sortSelect.querySelector('option[value="custom_distance_asc"]');
+    if (customOpt) customOpt.classList.add('hidden');
+    sortSelect.value = userLocation ? 'distance_asc' : 'default';
+  }
+
+  showToast('📍 指定場所による並び替えを解除しました');
+  renderStores();
 }
 
 function requestNearMeSearch(isAuto = false) {
@@ -1069,10 +1187,16 @@ function submitModalToGoogleForm() {
         params.set('pref', Array.from(selectedPrefs).join(','));
       }
 
-      // キーワード検索
-      const searchInput = document.getElementById('searchInput');
-      if (searchInput && searchInput.value.trim()) {
-        params.set('q', searchInput.value.trim());
+      // キーワード検索 または 指定場所
+      if (customLocation) {
+        params.set('near', customLocation.name);
+        params.set('lat', customLocation.lat);
+        params.set('lng', customLocation.lng);
+      } else {
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput && searchInput.value.trim()) {
+          params.set('q', searchInput.value.trim());
+        }
       }
 
       // ソート順
@@ -1113,8 +1237,17 @@ function submitModalToGoogleForm() {
         updatePrefTriggerButton();
       }
 
-      // キーワード検索
-      if (params.has('q')) {
+      // 指定場所またはキーワード検索の復元
+      if (params.has('near') && params.has('lat') && params.has('lng')) {
+        const nearName = params.get('near');
+        const nearLat = parseFloat(params.get('lat'));
+        const nearLng = parseFloat(params.get('lng'));
+        if (!isNaN(nearLat) && !isNaN(nearLng)) {
+          setCustomLocation(nearLat, nearLng, nearName);
+          const searchInput = document.getElementById('searchInput');
+          if (searchInput) searchInput.value = nearName;
+        }
+      } else if (params.has('q')) {
         const searchInput = document.getElementById('searchInput');
         if (searchInput) searchInput.value = params.get('q');
       }
@@ -1219,7 +1352,7 @@ function submitModalToGoogleForm() {
         const sortSelect = document.getElementById('sortSelect');
         const currentSort = sortSelect ? sortSelect.value : 'distance_asc';
 
-        if (currentSort === 'distance_asc' && !userLocation) {
+        if (currentSort === 'distance_asc' && !userLocation && !customLocation) {
           const container = document.getElementById('storeList');
           if (container) {
             container.innerHTML = `
@@ -1255,7 +1388,8 @@ function submitModalToGoogleForm() {
     // レンダリング (レスポンシブ：PCはワイドテーブル、スマホはハイブリッド最適化)
     function renderStores() {
       syncUrlParams();
-      const search = document.getElementById('searchInput').value.trim().toLowerCase();
+      // customLocation 有効時は全店舗を距離順に並べるためキーワード絞り込みをバイパス
+      const search = customLocation ? '' : document.getElementById('searchInput').value.trim().toLowerCase();
       const sort = document.getElementById('sortSelect').value;
       
       const cbs = Array.from(document.querySelectorAll('.filter-cb:checked')).map(cb => cb.value);
@@ -1303,7 +1437,7 @@ function submitModalToGoogleForm() {
       });
 
       // ソート処理（指定条件でソート後、お気に入り店舗★を最上部にピン留め）
-      if (sort === 'distance_asc') {
+      if (sort === 'distance_asc' || sort === 'custom_distance_asc') {
         filtered.sort((a, b) => {
           const distA = getStoreDistance(a);
           const distB = getStoreDistance(b);
@@ -1521,9 +1655,15 @@ function submitModalToGoogleForm() {
           : 'border-slate-200';
 
         const storeDist = getStoreDistance(s);
-        const distBadge = (userLocation && storeDist !== null) 
-          ? `<a href="${mapUrl}" target="_blank" rel="noopener noreferrer" class="text-[10px] sm:text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition px-1.5 py-0.5 rounded flex items-center gap-1 shadow-2xs" title="現在地からの直線距離（クリックでルート案内）"><i class="fa-solid fa-location-arrow text-[10px] text-blue-600"></i> ${formatDistance(storeDist)}</a>`
-          : '';
+        const activeLocation = customLocation || userLocation;
+        let distBadge = '';
+        if (activeLocation && storeDist !== null) {
+          if (customLocation) {
+            distBadge = `<span class="text-[10px] sm:text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-2xs" title="${customLocation.name}からの直線距離"><i class="fa-solid fa-location-dot text-[10px] text-blue-600"></i> ${customLocation.name}から ${formatDistance(storeDist)}</span>`;
+          } else {
+            distBadge = `<a href="${mapUrl}" target="_blank" rel="noopener noreferrer" class="text-[10px] sm:text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition px-1.5 py-0.5 rounded flex items-center gap-1 shadow-2xs" title="現在地からの直線距離（クリックでルート案内）"><i class="fa-solid fa-location-arrow text-[10px] text-blue-600"></i> ${formatDistance(storeDist)}</a>`;
+          }
+        }
 
         return `
           <div id="store-${code}" class="store-card bg-white rounded-xl shadow-sm border ${cardBorderClass} p-3.5 sm:p-5 hover:shadow-md transition duration-300 relative">
@@ -1749,6 +1889,13 @@ function submitModalToGoogleForm() {
     document.querySelectorAll('.filter-cb').forEach(cb => cb.addEventListener('change', renderStores));
 
     document.getElementById('resetFiltersBtn').addEventListener('click', () => {
+      if (customLocation) {
+        customLocation = null;
+        const banner = document.getElementById('customLocationBanner');
+        if (banner) banner.classList.add('hidden');
+        const customOpt = document.querySelector('#sortSelect option[value="custom_distance_asc"]');
+        if (customOpt) customOpt.classList.add('hidden');
+      }
       document.getElementById('searchInput').value = '';
       selectedPrefs.clear();
       updatePrefTriggerButton();
