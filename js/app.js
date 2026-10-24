@@ -102,6 +102,229 @@ function findBestGeocodingResult(query, items) {
   return best || items[0];
 }
 
+// === 国土地理院 ジオコーディングAPIを利用したサジェスト＆オートコンプリート機能 ===
+let suggestDebounceTimer = null;
+let isImeComposing = false;
+
+// サジェスト候補の取得とドロップダウン表示
+async function fetchLocationSuggestions(query) {
+  const dropdown = document.getElementById('searchSuggestDropdown');
+  if (!dropdown) return;
+
+  const q = query.trim();
+  if (!q || q.length < 1) {
+    closeSuggestDropdown();
+    return;
+  }
+
+  try {
+    const encoded = encodeURIComponent(q);
+    const resp = await fetch(`https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encoded}`);
+    if (!resp.ok) throw new Error('Network error');
+    const items = await resp.json();
+
+    if (!items || items.length === 0) {
+      renderSuggestDropdown(q, []);
+      return;
+    }
+
+    // スコアリングソート
+    const cleanQ = q.replace(/駅$/, '').trim();
+    const scored = [];
+    const seenTitles = new Set();
+
+    for (const item of items) {
+      const title = (item.properties?.title || '').trim();
+      const ds = String(item.properties?.dataSource || '');
+      const coords = item.geometry?.coordinates;
+      if (!coords || ds === '4') continue; // 三角点・基準点は除外
+
+      let score = 0;
+      let typ = 'area';
+      let sub = '地名・住所';
+
+      if (ds === '1') {
+        typ = 'station';
+        sub = '駅・鉄道';
+        if (title === q || title === cleanQ + '駅') {
+          score += 30000;
+        } else if (title.endsWith('駅') && cleanQ && title.includes(cleanQ)) {
+          score += 24000;
+        } else if (cleanQ && title.includes(cleanQ)) {
+          score += 18000;
+        } else {
+          score += 5000;
+        }
+      } else {
+        if (anyCityOrDistrict(title)) {
+          sub = '市区町村';
+          if (title.endsWith(cleanQ + '市') || title.endsWith(cleanQ + '区')) {
+            score += 22000;
+          } else if (cleanQ && title.includes(cleanQ)) {
+            score += 15000;
+          }
+        } else if (title === q) {
+          score += 16000;
+        } else if (cleanQ && title.includes(cleanQ)) {
+          score += 10000;
+        }
+      }
+
+      // 主要都道府県ブースト
+      if (/東京|神奈川|埼玉|千葉|愛知|大阪|兵庫|京都|福岡|北海道|宮城|広島|静岡/.test(title)) {
+        score += 2000;
+      }
+
+      if (seenTitles.has(title)) continue;
+      seenTitles.add(title);
+
+      scored.append ? scored.append : scored.push({ score, typ, title, sub, coords });
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+    renderSuggestDropdown(q, scored.slice(0, 5));
+  } catch (err) {
+    console.warn('Suggest error:', err);
+    renderSuggestDropdown(q, []);
+  }
+}
+
+function anyCityOrDistrict(str) {
+  return str.endsWith('市') || str.endsWith('区') || str.endsWith('町') || str.endsWith('村');
+}
+
+// ドロップダウンのHTML描画
+function renderSuggestDropdown(query, suggestions) {
+  const dropdown = document.getElementById('searchSuggestDropdown');
+  if (!dropdown) return;
+
+  const escapedQ = escapeHtml(query);
+  let html = '';
+
+  // 最上部: 通常検索（キーワード絞り込み）オプション
+  html += `
+    <button type="button" onclick="selectSearchMode('keyword')" 
+            class="w-full px-3.5 py-2.5 text-left hover:bg-orange-50/80 flex items-center justify-between gap-2 group transition border-b border-slate-100 cursor-pointer">
+      <div class="flex items-center gap-2.5 truncate">
+        <span class="w-6 h-6 rounded-md bg-orange-100 text-orange-600 flex items-center justify-center text-xs flex-shrink-0 group-hover:scale-110 transition">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </span>
+        <div class="truncate text-xs">
+          <span class="font-bold text-slate-800">「${escapedQ}」で店舗名・住所を検索</span>
+          <span class="text-[10px] text-slate-400 block truncate">完全個室のある快活店舗名や住所を直接絞り込み</span>
+        </div>
+      </div>
+      <span class="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200 flex-shrink-0">通常検索</span>
+    </button>
+  `;
+
+  if (suggestions.length > 0) {
+    html += `<div class="px-3.5 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+      <i class="fa-solid fa-location-dot text-blue-500"></i> 指定場所から近い順に並び替え（候補をタップ）
+    </div>`;
+
+    suggestions.forEach(s => {
+      const isStation = s.typ === 'station';
+      const icon = isStation ? 'fa-train-subway' : 'fa-location-dot';
+      const iconBg = isStation ? 'bg-indigo-100 text-indigo-600' : 'bg-blue-100 text-blue-600';
+      const badgeText = isStation ? '駅' : s.sub;
+      const escapedTitle = escapeHtml(s.title);
+      const [lng, lat] = s.coords;
+
+      html += `
+        <button type="button" onclick="selectSuggestionLocation(${lat}, ${lng}, '${escapedTitle}')" 
+                class="w-full px-3.5 py-2.5 text-left hover:bg-blue-50/80 flex items-center justify-between gap-2 group transition cursor-pointer">
+          <div class="flex items-center gap-2.5 truncate">
+            <span class="w-6 h-6 rounded-md ${iconBg} flex items-center justify-center text-xs flex-shrink-0 group-hover:scale-110 transition">
+              <i class="fa-solid ${icon}"></i>
+            </span>
+            <div class="truncate text-xs">
+              <div class="flex items-center gap-1.5 truncate">
+                <span class="font-bold text-slate-800 truncate">${escapedTitle}</span>
+                <span class="text-[9px] text-slate-500 bg-slate-100 border border-slate-200 px-1 py-0.2 rounded font-medium">${badgeText}</span>
+              </div>
+              <span class="text-[10px] text-slate-400 block truncate">ここから全国の快活CLUBを近い順にソート</span>
+            </div>
+          </div>
+          <span class="text-[10px] font-bold text-blue-600 bg-blue-50 group-hover:bg-blue-600 group-hover:text-white px-2 py-0.5 rounded border border-blue-200 flex-shrink-0 flex items-center gap-1 transition">
+            <i class="fa-solid fa-location-arrow text-[9px]"></i> 近い順
+          </span>
+        </button>
+      `;
+    });
+  }
+
+  dropdown.innerHTML = html;
+  dropdown.classList.remove('hidden');
+}
+
+function escapeHtml(str) {
+  return str.replace(/[&<>'"]/g, tag => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;'
+  }[tag] || tag));
+}
+
+function closeSuggestDropdown() {
+  const dropdown = document.getElementById('searchSuggestDropdown');
+  if (dropdown) dropdown.classList.add('hidden');
+}
+
+// サジェスト候補から場所を選択
+function selectSuggestionLocation(lat, lng, name) {
+  closeSuggestDropdown();
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) searchInput.value = name;
+  updateClearBtnVisibility();
+  setCustomLocation(lat, lng, name);
+  showToast(`📍「${name}」から近い順に全店舗を並び替えました！`);
+}
+
+// 通常検索モードを選択
+function selectSearchMode(mode) {
+  closeSuggestDropdown();
+  if (customLocation) {
+    customLocation = null;
+    const banner = document.getElementById('customLocationBanner');
+    if (banner) banner.classList.add('hidden');
+    const sortSelect = document.getElementById('sortSelect');
+    if (sortSelect) {
+      const customOpt = sortSelect.querySelector('option[value="custom_distance_asc"]');
+      if (customOpt) customOpt.classList.add('hidden');
+      sortSelect.value = userLocation ? 'distance_asc' : 'default';
+    }
+  }
+  updateClearBtnVisibility();
+  renderStores();
+}
+
+// 入力クリアボタンと指定場所リセット
+function clearSearchInputAndSort() {
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) searchInput.value = '';
+  updateClearBtnVisibility();
+  closeSuggestDropdown();
+  if (customLocation) {
+    clearCustomLocation();
+  } else {
+    renderStores();
+  }
+}
+
+function updateClearBtnVisibility() {
+  const searchInput = document.getElementById('searchInput');
+  const clearBtn = document.getElementById('searchClearBtn');
+  if (!clearBtn || !searchInput) return;
+  if (searchInput.value.trim().length > 0) {
+    clearBtn.classList.remove('hidden');
+  } else {
+    clearBtn.classList.add('hidden');
+  }
+}
+
 // === 国土地理院 ジオコーディングAPIを利用した指定場所からの近い順検索 ===
 async function searchNearSpecifiedPlace() {
   const searchInput = document.getElementById('searchInput');
@@ -170,10 +393,13 @@ async function searchNearSpecifiedPlace() {
   }
 }
 
-// 検索入力欄での Enter キーハンドラ
+// 検索入力欄でのキー操作ハンドラ
 function handleSearchKeydown(event) {
-  if (event.key === 'Enter') {
+  if (event.key === 'Escape') {
+    closeSuggestDropdown();
+  } else if (event.key === 'Enter') {
     event.preventDefault();
+    closeSuggestDropdown();
     searchNearSpecifiedPlace();
   }
 }
@@ -1319,7 +1545,10 @@ function submitModalToGoogleForm() {
         if (!isNaN(nearLat) && !isNaN(nearLng)) {
           setCustomLocation(nearLat, nearLng, nearName);
           const searchInput = document.getElementById('searchInput');
-          if (searchInput) searchInput.value = nearName;
+          if (searchInput) {
+            searchInput.value = nearName;
+            updateClearBtnVisibility();
+          }
         }
       } else if (params.has('q')) {
         const searchInput = document.getElementById('searchInput');
@@ -1951,33 +2180,47 @@ function submitModalToGoogleForm() {
     });
 
     // イベントリスナー
-    // 検索入力のデバウンス＆日本語IME変換中ガード（タイピング中の動作を極限まで軽量化）
+    // 検索入力のサジェスト連携＆タイピング超軽量化（文字入力中は重いレンダリングをスキップ）
     const searchInputEl = document.getElementById('searchInput');
-    let searchDebounceTimer = null;
-    let isImeComposing = false;
-
-    function triggerDebouncedSearch() {
-      clearTimeout(searchDebounceTimer);
-      searchDebounceTimer = setTimeout(() => {
-        // もし文字が空になったら指定場所ソートも解除
-        if (searchInputEl.value.trim() === '' && customLocation) {
-          clearCustomLocation();
-          return;
-        }
-        renderStores();
-      }, 250); // 250ms タイピングが止まってから快適にレンダリング
-    }
 
     searchInputEl.addEventListener('compositionstart', () => {
       isImeComposing = true;
     });
     searchInputEl.addEventListener('compositionend', () => {
       isImeComposing = false;
-      triggerDebouncedSearch();
+      updateClearBtnVisibility();
+      triggerDebouncedSuggest();
     });
     searchInputEl.addEventListener('input', () => {
-      if (isImeComposing) return; // 日本語入力の確定前（変換候補選択中）はレンダリングを保留
-      triggerDebouncedSearch();
+      updateClearBtnVisibility();
+      if (isImeComposing) return; // 変換確定前はスキップ
+      triggerDebouncedSuggest();
+    });
+
+    function triggerDebouncedSuggest() {
+      clearTimeout(suggestDebounceTimer);
+      const val = searchInputEl.value.trim();
+      if (!val) {
+        closeSuggestDropdown();
+        if (customLocation) {
+          clearCustomLocation();
+        } else {
+          renderStores();
+        }
+        return;
+      }
+      // 入力が止まって 750ms 後にサジェスト（候補ドロップダウン）を取得
+      suggestDebounceTimer = setTimeout(() => {
+        fetchLocationSuggestions(val);
+      }, 750);
+    }
+
+    // 外側クリックでサジェストドロップダウンを閉じる
+    document.addEventListener('click', (e) => {
+      const searchContainer = document.getElementById('searchContainer');
+      if (searchContainer && !searchContainer.contains(e.target)) {
+        closeSuggestDropdown();
+      }
     });
     document.getElementById('sortSelect').addEventListener('change', () => {
       const sortVal = document.getElementById('sortSelect').value;
@@ -1998,6 +2241,8 @@ function submitModalToGoogleForm() {
         if (customOpt) customOpt.classList.add('hidden');
       }
       document.getElementById('searchInput').value = '';
+      updateClearBtnVisibility();
+      closeSuggestDropdown();
       selectedPrefs.clear();
       updatePrefTriggerButton();
       document.getElementById('sortSelect').value = userLocation ? 'distance_asc' : 'default';

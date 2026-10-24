@@ -150,18 +150,33 @@
         </button>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3 mb-3">
-        <!-- キーワード検索 ＆ 指定場所ソート -->
-        <div class="relative flex items-center">
+        <!-- キーワード検索 ＆ オートコンプリート場所ソート -->
+        <div id="searchContainer" class="relative flex items-center">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 sm:top-3 text-slate-400 text-sm pointer-events-none"></i>
-          <input type="text" id="searchInput" placeholder="店舗名・駅名・地名で検索..." 
-                 class="w-full pl-9 pr-20 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
+          <input type="text" id="searchInput" placeholder="店舗名・駅名・地名を入力（候補が自動表示されます）..." 
+                 class="w-full pl-9 pr-24 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                 autocomplete="off"
                  onkeydown="handleSearchKeydown(event)">
+          
+          <!-- 文字クリアボタン（入力時のみ表示） -->
+          <button id="searchClearBtn" type="button" onclick="clearSearchInputAndSort()" 
+                  class="hidden absolute right-18 top-2 sm:top-2.5 text-slate-400 hover:text-slate-600 p-0.5 rounded-full text-xs transition" 
+                  title="入力をクリア">
+            <i class="fa-solid fa-circle-xmark"></i>
+          </button>
+
+          <!-- 近い順実行ボタン -->
           <button id="searchNearBtn" type="button" onclick="searchNearSpecifiedPlace()" 
                   class="absolute right-1 top-1 bottom-1 px-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold rounded-md text-[10px] sm:text-xs flex items-center gap-1 shadow-2xs transition active:scale-95" 
                   title="入力した駅名・地名から近い順に並び替え">
             <i class="fa-solid fa-location-arrow text-[10px]"></i>
             <span>近い順</span>
           </button>
+
+          <!-- サジェスト候補ドロップダウン (自動表示) -->
+          <div id="searchSuggestDropdown" class="hidden absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-100 max-h-80 overflow-y-auto">
+            <!-- JavaScriptで動的生成 -->
+          </div>
         </div>
 
         <!-- 都道府県・エリア選択ボタン（複数選択＆地方グルーピング対応） -->
@@ -556,6 +571,6 @@
   </div>
 
   <!-- スクリプト -->
-  <script src="js/app.js?v=20261025_0818"></script>
+  <script src="js/app.js?v=20261025_0825"></script>
 </body>
 </html>
