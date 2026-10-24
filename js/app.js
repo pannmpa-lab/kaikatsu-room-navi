@@ -1,6 +1,7 @@
 let allStores = [];
 let userLocation = null; // { lat: number, lng: number }
 let customLocation = null; // { lat: number, lng: number, name: string }
+let muniMap = null; // 自治体コード辞書 { '14134': '神奈川県川崎市高津区' }
 
 // === GPS / 現在地・距離計算 ===
 function deg2rad(deg) {
@@ -178,7 +179,8 @@ async function fetchLocationSuggestions(query) {
       if (seenTitles.has(title)) continue;
       seenTitles.add(title);
 
-      scored.append ? scored.append : scored.push({ score, typ, title, sub, coords });
+      const addressCode = item.properties?.addressCode || '';
+      scored.push({ score, typ, title, sub, coords, addressCode });
     }
 
     scored.sort((a, b) => b.score - a.score);
@@ -227,12 +229,29 @@ function renderSuggestDropdown(query, suggestions) {
       const isStation = s.typ === 'station';
       const icon = isStation ? 'fa-train-subway' : 'fa-location-dot';
       const iconBg = isStation ? 'bg-indigo-100 text-indigo-600' : 'bg-blue-100 text-blue-600';
-      const badgeText = isStation ? '駅' : s.sub;
+      
+      // 自治体コード辞書（muniMap）から都道府県＋市区町村を取得（例: 神奈川県川崎市高津区）
+      let muniName = '';
+      if (muniMap && s.addressCode) {
+        const code5 = String(s.addressCode).padStart(5, '0');
+        muniName = muniMap[code5] || '';
+      }
+
+      // バッジ表示テキストの生成（例: 駅・神奈川県川崎市高津区）
+      let badgeText = '';
+      if (isStation) {
+        badgeText = muniName ? `駅・${muniName}` : '駅';
+      } else if (s.sub === '市区町村') {
+        badgeText = muniName || '市区町村';
+      } else {
+        badgeText = muniName ? `地名・${muniName}` : '地名・住所';
+      }
+
       const escapedTitle = escapeHtml(s.title);
       const [lng, lat] = s.coords;
 
       html += `
-        <button type="button" onclick="selectSuggestionLocation(${lat}, ${lng}, '${escapedTitle}')" 
+        <button type="button" onclick="selectSuggestionLocation(${lat}, ${lng}, '${escapedTitle}', '${escapeHtml(muniName)}')" 
                 class="w-full px-3.5 py-2.5 text-left hover:bg-blue-50/80 flex items-center justify-between gap-2 group transition cursor-pointer">
           <div class="flex items-center gap-2.5 truncate">
             <span class="w-6 h-6 rounded-md ${iconBg} flex items-center justify-center text-xs flex-shrink-0 group-hover:scale-110 transition">
@@ -241,7 +260,7 @@ function renderSuggestDropdown(query, suggestions) {
             <div class="truncate text-xs">
               <div class="flex items-center gap-1.5 truncate">
                 <span class="font-bold text-slate-800 truncate">${escapedTitle}</span>
-                <span class="text-[9px] text-slate-500 bg-slate-100 border border-slate-200 px-1 py-0.2 rounded font-medium">${badgeText}</span>
+                <span class="text-[9px] text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded font-medium flex-shrink-0">${badgeText}</span>
               </div>
               <span class="text-[10px] text-slate-400 block truncate">ここから全国の快活CLUBを近い順にソート</span>
             </div>
@@ -274,13 +293,14 @@ function closeSuggestDropdown() {
 }
 
 // サジェスト候補から場所を選択
-function selectSuggestionLocation(lat, lng, name) {
+function selectSuggestionLocation(lat, lng, name, muniName = '') {
   closeSuggestDropdown();
+  const displayName = muniName && !name.includes(muniName) ? `${name} (${muniName})` : name;
   const searchInput = document.getElementById('searchInput');
   if (searchInput) searchInput.value = name;
   updateClearBtnVisibility();
-  setCustomLocation(lat, lng, name);
-  showToast(`📍「${name}」から近い順に全店舗を並び替えました！`);
+  setCustomLocation(lat, lng, displayName);
+  showToast(`📍「${displayName}」から近い順に全店舗を並び替えました！`);
 }
 
 // 通常検索モードを選択
@@ -1648,6 +1668,9 @@ function submitModalToGoogleForm() {
     // データ読み込み
     async function loadData() {
       try {
+        // 自治体コード辞書を並行読み込み
+        fetch('muni.json').then(r => r.json()).then(data => { muniMap = data; }).catch(e => console.warn('muni.json load failed:', e));
+
         const resp = await fetch('stores.json?t=' + Date.now());
         allStores = await resp.json();
         restoreFromUrlParams();
