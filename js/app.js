@@ -35,6 +35,73 @@ function formatDistance(distKm) {
   return `${distKm.toFixed(1)}km`;
 }
 
+// === 国土地理院 ジオコーディングAPIのスマート・スコアリング選定 ===
+// 五十音順・北日本順に並んだ地名リストから、ユーザーが探している主要駅・自治体を最優先で選抜
+function findBestGeocodingResult(query, items) {
+  if (!items || items.length === 0) return null;
+  const q = query.trim();
+  const cleanQ = q.replace(/駅$/, '').trim();
+  const isStationQuery = q.includes('駅');
+
+  let best = null;
+  let maxScore = -999999;
+
+  for (const item of items) {
+    const title = (item.properties?.title || '').trim();
+    const ds = String(item.properties?.dataSource || '');
+    let score = 0;
+
+    // 三角点・基準点 (ds === '4') は山や離島の測量点なので最下位
+    if (ds === '4') {
+      score -= 10000;
+    }
+
+    // 1. 駅施設 (ds === '1')
+    if (ds === '1') {
+      if (title === q) {
+        score += 30000; // 「溝の口駅」「新宿駅」など完全一致
+      } else if (title === cleanQ + '駅') {
+        score += 26000; // 「溝の口」→「溝の口駅」、「梅田」→「梅田駅」
+      } else if (title.endsWith('駅') && (title.includes(cleanQ) || cleanQ.includes(title.replace(/駅$/, '')))) {
+        score += 22000; // 「溝の口」→「武蔵溝ノ口駅」
+      } else if (title.includes('駅') && cleanQ.length >= 2 && title.includes(cleanQ)) {
+        score += 15000;
+      } else {
+        score += 5000;
+      }
+    }
+
+    // 2. 自治体・行政区（都道府県・政令市・区・市）
+    // 例: 「神奈川県横浜市」「東京都渋谷区」「大阪府大阪市北区梅田」「神奈川県川崎市高津区溝口」
+    if (!ds || ds === '0') {
+      if (title.endsWith(q + '市') || title.endsWith(q + '区')) {
+        score += 24000; // 「横浜」→「神奈川県横浜市」
+      } else if (title.endsWith('区' + cleanQ) || title.endsWith('市' + cleanQ)) {
+        score += 20000;
+      } else if (cleanQ.length >= 2 && title.includes(cleanQ)) {
+        score += 8000;
+      }
+    }
+
+    // 3. タイトル自体の完全一致
+    if (title === q && ds !== '4') {
+      score += 16000;
+    }
+
+    // 4. 快活店舗が存在する主要都市・都道府県への親和性ブースト
+    if (/東京|神奈川|埼玉|千葉|愛知|大阪|兵庫|京都|福岡|北海道|宮城|広島|静岡/.test(title)) {
+      score += 2000;
+    }
+
+    if (score > maxScore) {
+      maxScore = score;
+      best = item;
+    }
+  }
+
+  return best || items[0];
+}
+
 // === 国土地理院 ジオコーディングAPIを利用した指定場所からの近い順検索 ===
 async function searchNearSpecifiedPlace() {
   const searchInput = document.getElementById('searchInput');
@@ -60,7 +127,7 @@ async function searchNearSpecifiedPlace() {
     const data = await resp.json();
 
     if (!data || data.length === 0) {
-      // APIで見つからない場合、店舗データの都道府県・市区町村・住所からの部分一致フォールバック検索
+      // APIで見つからない場合、店舗データの市区町村・住所からの部分一致フォールバック
       const matchedStore = allStores.find(s => 
         (s['市区町村'] && s['市区町村'].includes(query)) ||
         (s['住所'] && s['住所'].includes(query)) ||
@@ -75,11 +142,13 @@ async function searchNearSpecifiedPlace() {
       return;
     }
 
-    const first = data[0];
-    const [lng, lat] = first.geometry.coordinates;
+    // スコアリングにより最適な駅・行政区を賢く抽出
+    const best = findBestGeocodingResult(query, data);
+    const [lng, lat] = best.geometry.coordinates;
+    const title = best.properties?.title || query;
 
     setCustomLocation(lat, lng, query);
-    showToast(`📍「${query}」から近い順に全店舗を並び替えました！`);
+    showToast(`📍「${query}」(${title}) から近い順に全店舗を並び替えました！`);
   } catch (err) {
     console.error('Geocoding error:', err);
     // エラー時のフォールバック
@@ -1223,7 +1292,12 @@ function submitModalToGoogleForm() {
 
       const queryString = params.toString();
       const newUrl = queryString ? `${window.location.pathname}?${queryString}` : window.location.pathname;
-      window.history.replaceState({}, '', newUrl);
+      if (window._syncUrlTimer) clearTimeout(window._syncUrlTimer);
+      window._syncUrlTimer = setTimeout(() => {
+        if (window.location.search !== (queryString ? `?${queryString}` : '')) {
+          window.history.replaceState({}, '', newUrl);
+        }
+      }, 300);
     }
 
     function restoreFromUrlParams() {
@@ -1877,7 +1951,34 @@ function submitModalToGoogleForm() {
     });
 
     // イベントリスナー
-    document.getElementById('searchInput').addEventListener('input', renderStores);
+    // 検索入力のデバウンス＆日本語IME変換中ガード（タイピング中の動作を極限まで軽量化）
+    const searchInputEl = document.getElementById('searchInput');
+    let searchDebounceTimer = null;
+    let isImeComposing = false;
+
+    function triggerDebouncedSearch() {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        // もし文字が空になったら指定場所ソートも解除
+        if (searchInputEl.value.trim() === '' && customLocation) {
+          clearCustomLocation();
+          return;
+        }
+        renderStores();
+      }, 250); // 250ms タイピングが止まってから快適にレンダリング
+    }
+
+    searchInputEl.addEventListener('compositionstart', () => {
+      isImeComposing = true;
+    });
+    searchInputEl.addEventListener('compositionend', () => {
+      isImeComposing = false;
+      triggerDebouncedSearch();
+    });
+    searchInputEl.addEventListener('input', () => {
+      if (isImeComposing) return; // 日本語入力の確定前（変換候補選択中）はレンダリングを保留
+      triggerDebouncedSearch();
+    });
     document.getElementById('sortSelect').addEventListener('change', () => {
       const sortVal = document.getElementById('sortSelect').value;
       if (sortVal === 'distance_asc' && !userLocation) {
