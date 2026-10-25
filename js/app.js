@@ -3,6 +3,13 @@ let userLocation = null; // { lat: number, lng: number }
 let customLocation = null; // { lat: number, lng: number, name: string }
 let muniMap = null; // 自治体コード辞書 { '14134': '神奈川県川崎市高津区' }
 
+// === 段階的レンダリング（無限スクロール）用状態 ===
+let currentFilteredStores = [];
+let renderedCount = 0;
+const PAGE_SIZE_INITIAL = 30; // 初回描画数
+const PAGE_SIZE_MORE = 20;    // スクロール追加読み込み数
+let scrollObserver = null;
+
 // === GPS / 現在地・距離計算 ===
 function deg2rad(deg) {
   return deg * (Math.PI / 180);
@@ -1762,11 +1769,17 @@ function submitModalToGoogleForm() {
         return true;
       });
 
+      // 距離計算の事前キャッシュ化（数千回の三角関数呼び出しをN回に削減して劇的爆速化）
+      const activeLoc = customLocation || userLocation;
+      for (let i = 0; i < filtered.length; i++) {
+        filtered[i]._cachedDist = activeLoc ? getStoreDistance(filtered[i]) : null;
+      }
+
       // ソート処理（指定条件でソート後、お気に入り店舗★を最上部にピン留め）
       if (sort === 'distance_asc' || sort === 'custom_distance_asc') {
         filtered.sort((a, b) => {
-          const distA = getStoreDistance(a);
-          const distB = getStoreDistance(b);
+          const distA = a._cachedDist;
+          const distB = b._cachedDist;
           return (distA !== null ? distA : 999999) - (distB !== null ? distB : 999999);
         });
       } else if (sort === 'weekday3h_asc') {
@@ -1816,7 +1829,15 @@ function submitModalToGoogleForm() {
         return;
       }
 
-      container.innerHTML = filtered.map(s => {
+      // 段階的レンダリング（初期表示は上位30件のみ描画し、残りはスクロールで自動追加）
+      currentFilteredStores = filtered;
+      renderedCount = 0;
+      container.innerHTML = '';
+      appendMoreStores(PAGE_SIZE_INITIAL);
+    }
+
+    // 単一店舗カードのHTML生成
+    function renderSingleStoreCard(s) {
         const code = s['店舗コード'];
         const name = s['店舗名'];
         const pref = s['都道府県'];
@@ -1980,7 +2001,7 @@ function submitModalToGoogleForm() {
           ? 'border-amber-300 ring-2 ring-amber-300/40 shadow-sm' 
           : 'border-slate-200';
 
-        const storeDist = getStoreDistance(s);
+        const storeDist = s._cachedDist !== undefined ? s._cachedDist : getStoreDistance(s);
         const activeLocation = customLocation || userLocation;
         let distBadge = '';
         if (activeLocation && storeDist !== null) {
@@ -2188,10 +2209,60 @@ function submitModalToGoogleForm() {
 
           </div>
         `;
-      }).join('');
     }
 
-    // フィルター開閉トグル（スマホ向け）
+    // 店舗の追加描画（無限スクロール・段階的表示）
+    function appendMoreStores(count = PAGE_SIZE_MORE) {
+      const container = document.getElementById('storeList');
+      if (!container || renderedCount >= currentFilteredStores.length) return;
+
+      const oldSentinel = document.getElementById('infiniteScrollSentinel');
+      if (oldSentinel) oldSentinel.remove();
+
+      const nextBatch = currentFilteredStores.slice(renderedCount, renderedCount + count);
+      if (nextBatch.length === 0) return;
+
+      const html = nextBatch.map(s => renderSingleStoreCard(s)).join('');
+      container.insertAdjacentHTML('beforeend', html);
+      renderedCount += nextBatch.length;
+
+      // まだ残りの店舗がある場合、自動監視用センチネル ＆ 手動「さらに表示」ボタンを設置
+      if (renderedCount < currentFilteredStores.length) {
+        const remaining = currentFilteredStores.length - renderedCount;
+        const sentinelHtml = `
+          <div id="infiniteScrollSentinel" class="py-6 text-center space-y-2 col-span-full">
+            <button type="button" onclick="appendMoreStores(${PAGE_SIZE_MORE})" 
+                    class="px-5 py-2.5 bg-white border border-slate-300 hover:border-orange-500 hover:bg-orange-50 text-slate-700 hover:text-orange-700 font-bold rounded-xl text-xs sm:text-sm shadow-xs transition inline-flex items-center gap-2 cursor-pointer active:scale-95">
+              <i class="fa-solid fa-angles-down text-orange-500"></i>
+              <span>さらに店舗を表示（残り ${remaining} 店舗）</span>
+            </button>
+            <p class="text-[11px] text-slate-400">※ スクロールすると自動で次の店舗を読み込みます</p>
+          </div>
+        `;
+        container.insertAdjacentHTML('beforeend', sentinelHtml);
+        setupIntersectionObserver();
+      }
+    }
+
+    // スクロール監視（画面下部に近づいたら自動で追加描画）
+    function setupIntersectionObserver() {
+      if (scrollObserver) scrollObserver.disconnect();
+      const sentinel = document.getElementById('infiniteScrollSentinel');
+      if (!sentinel) return;
+
+      scrollObserver = new IntersectionObserver((entries) => {
+        if (entries[0] && entries[0].isIntersecting) {
+          appendMoreStores(PAGE_SIZE_MORE);
+        }
+      }, {
+        rootMargin: '500px', // 500px手前でフライング自動ロード
+        threshold: 0.01
+      });
+
+      scrollObserver.observe(sentinel);
+    }
+
+    // フィルター開閉トグル    // フィルター開閉トグル（スマホ向け）
     const toggleFilterBtn = document.getElementById('toggleFilterBtn');
     const amenityFiltersContainer = document.getElementById('amenityFiltersContainer');
     const filterArrow = document.getElementById('filterArrow');
