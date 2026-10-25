@@ -137,7 +137,7 @@ if __name__ == "__main__":
     import sys
     logging.basicConfig(level=logging.INFO)
     if len(sys.argv) > 1 and sys.argv[1] == "--test":
-        print("Sending test tweet to @panforge_lab...")
+        print("Sending test tweet to @pannmpa...")
         test_tweet = (
             "【システム稼働テスト 🤖】\n"
             "快活CLUB 完全個室ナビ 自動速報ボットの疎通確認テストです。\n"

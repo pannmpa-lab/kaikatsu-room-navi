@@ -41,8 +41,8 @@ jobs:
 
       - name: 変更があればコミット＆プッシュ
         run: |
-          git config user.name "pan-forge"
-          git config user.email "panforge.lab@gmail.com"
+          git config user.name "pannmpa"
+          git config user.email "pannmpa@gmail.com"
           git add stores.json
           if git diff --staged --quiet; then
             echo "データに変更はありませんでした。"
