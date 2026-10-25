@@ -1837,7 +1837,8 @@ function submitModalToGoogleForm() {
     }
 
     // 単一店舗カードのHTML生成
-    function renderSingleStoreCard(s) {
+    function renderSingleStoreCard(s, favSet = null) {
+      if (!favSet) favSet = new Set(getFavoriteStores());
         const code = s['店舗コード'];
         const name = s['店舗名'];
         const pref = s['都道府県'];
@@ -2222,7 +2223,8 @@ function submitModalToGoogleForm() {
       const nextBatch = currentFilteredStores.slice(renderedCount, renderedCount + count);
       if (nextBatch.length === 0) return;
 
-      const html = nextBatch.map(s => renderSingleStoreCard(s)).join('');
+      const favSet = new Set(getFavoriteStores());
+      const html = nextBatch.map(s => renderSingleStoreCard(s, favSet)).join('');
       container.insertAdjacentHTML('beforeend', html);
       renderedCount += nextBatch.length;
 
