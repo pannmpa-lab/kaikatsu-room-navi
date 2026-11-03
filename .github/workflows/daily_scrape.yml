@@ -43,7 +43,7 @@ jobs:
         run: |
           git config user.name "pannmpa"
           git config user.email "pannmpa@gmail.com"
-          git add stores.json
+          git add stores.json ocr_cache.json
           if git diff --staged --quiet; then
             echo "データに変更はありませんでした。"
           else

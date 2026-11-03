@@ -1,0 +1,30 @@
+{
+  "20949": {
+    "hash": "3c0ac412b5bcede9ceda9d597d1b5a9c",
+    "image_url": "https://www.kaikatsu.jp/shop/images/2025/20949_20250728.png",
+    "prices": {
+      "private_weekday_basic_taxfee": "-",
+      "private_weekday_10_taxfee": 140,
+      "private_weekday_3h_taxfee": 1560,
+      "private_weekday_6h_taxfee": 2570,
+      "private_weekday_9h_taxfee": "-",
+      "private_weekday_12h_taxfee": 4150,
+      "private_weekday_15h_taxfee": "-",
+      "private_weekday_18h_taxfee": 4150,
+      "private_weekday_21h_taxfee": "-",
+      "private_weekday_24h_taxfee": "-",
+      "private_weekend_basic_taxfee": "-",
+      "private_weekend_10_taxfee": 220,
+      "private_weekend_3h_taxfee": 2450,
+      "private_weekend_6h_taxfee": 4900,
+      "private_weekend_9h_taxfee": "-",
+      "private_weekend_12h_taxfee": 9800,
+      "private_weekend_15h_taxfee": "-",
+      "private_weekend_18h_taxfee": 9800,
+      "private_weekend_21h_taxfee": "-",
+      "private_weekend_24h_taxfee": "-",
+      "annotation_weekend_1": "金・祝前日PM6:00~ と土日・祝日は休日料金となります。"
+    },
+    "updated_at": "2026-11-04 08:15:00"
+  }
+}

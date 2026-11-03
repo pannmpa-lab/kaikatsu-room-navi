@@ -1,3 +1,6 @@
+import hashlib
+from datetime import datetime
+from pathlib import Path
 import base64
 import json
 import logging
@@ -16,6 +19,46 @@ logger = logging.getLogger(__name__)
 
 # トークンのキャッシュ
 _cached_token = None
+
+# OCR解析結果のハッシュキャッシュ
+CACHE_FILE = Path(__file__).resolve().parent / "ocr_cache.json"
+
+def load_ocr_cache() -> Dict[str, Any]:
+    """料金表画像のハッシュキャッシュをロードする"""
+    if CACHE_FILE.exists():
+        try:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"OCRキャッシュ読み込み失敗: {e}")
+    return {}
+
+def save_ocr_cache(cache: Dict[str, Any]):
+    """料金表画像のハッシュキャッシュを保存する"""
+    try:
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.warning(f"OCRキャッシュ保存失敗: {e}")
+
+def fetch_price_image_bytes(store_code: str) -> Tuple[Optional[str], Optional[bytes], Optional[str]]:
+    """
+    店舗詳細ページから料金表画像のURL、バイナリ、MD5ハッシュを取得する。
+    """
+    img_url = fetch_price_image_url(store_code)
+    if not img_url:
+        return None, None, None
+
+    try:
+        req_img = urllib.request.Request(img_url, headers={"User-Agent": config.USER_AGENT})
+        with urllib.request.urlopen(req_img, timeout=config.REQUEST_TIMEOUT) as resp:
+            img_bytes = resp.read()
+        img_hash = hashlib.md5(img_bytes).hexdigest()
+        return img_url, img_bytes, img_hash
+    except Exception as e:
+        logger.warning(f"店舗 [{store_code}] の画像ダウンロード失敗 ({img_url}): {e}")
+        return img_url, None, None
+
 
 
 def get_auth_token() -> Optional[str]:
@@ -64,19 +107,15 @@ def fetch_price_image_url(store_code: str) -> Optional[str]:
     return None
 
 
-def ocr_image_url(img_url: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+def ocr_image_bytes(img_bytes: bytes) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """
-    Cloud Vision API (DOCUMENT_TEXT_DETECTION) を使用して画像から詳細アノテーションとテキストを抽出する。
+    画像バイナリを Cloud Vision API (DOCUMENT_TEXT_DETECTION) に投げて詳細アノテーションとテキストを抽出する。
     """
     token = get_auth_token()
     if not token:
         return None, None
 
     try:
-        req_img = urllib.request.Request(img_url, headers={"User-Agent": config.USER_AGENT})
-        with urllib.request.urlopen(req_img, timeout=config.REQUEST_TIMEOUT) as resp:
-            img_bytes = resp.read()
-
         b64 = base64.b64encode(img_bytes).decode("utf-8")
         api_url = "https://vision.googleapis.com/v1/images:annotate"
         headers = {
@@ -104,8 +143,21 @@ def ocr_image_url(img_url: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]
             full_ann = responses[0]["fullTextAnnotation"]
             return full_ann, full_ann.get("text", "")
     except Exception as e:
-        logger.warning(f"Cloud Vision API 呼び出し失敗 ({img_url}): {e}")
+        logger.warning(f"Cloud Vision API 呼び出し失敗: {e}")
     return None, None
+
+def ocr_image_url(img_url: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    指定URLの画像をダウンロードして Cloud Vision API で解析する（後方互換用）。
+    """
+    try:
+        req_img = urllib.request.Request(img_url, headers={"User-Agent": config.USER_AGENT})
+        with urllib.request.urlopen(req_img, timeout=config.REQUEST_TIMEOUT) as resp:
+            img_bytes = resp.read()
+        return ocr_image_bytes(img_bytes)
+    except Exception as e:
+        logger.warning(f"画像ダウンロード失敗 ({img_url}): {e}")
+        return None, None
 
 
 
@@ -487,30 +539,54 @@ def parse_prices_geometric(full_text_annotation: Dict[str, Any], text_fallback: 
 
 def get_store_price_from_image(store_code: str) -> Optional[Dict[str, Any]]:
     """
-    店舗コードから料金表画像を特定し、Cloud Vision API で料金を抽出する。
-    1. 幾何学的パーサー (parse_prices_geometric) を優先
-    2. 取得項目が少ない場合は従来の正規表現パーサー (parse_prices_from_ocr) にフォールバック
+    店舗コードから料金表画像を特定し、画像ハッシュによる差分検知付きで料金を抽出する。
+    画像が前回と同一（ハッシュ一致）なら Cloud Vision API をスキップしてキャッシュを利用（完全無料）。
+    画像が変更された時のみ API を呼び出して料金を再抽出する。
     """
-    img_url = fetch_price_image_url(store_code)
-    if not img_url:
+    img_url, img_bytes, img_hash = fetch_price_image_bytes(store_code)
+    if not img_url or not img_bytes:
         return None
 
-    logger.info(f"店舗 [{store_code}] の料金表画像をOCR解析中: {img_url}")
-    full_ann, text = ocr_image_url(img_url)
+    # キャッシュの照合
+    cache = load_ocr_cache()
+    cached_entry = cache.get(str(store_code))
+    if cached_entry and cached_entry.get("hash") == img_hash and cached_entry.get("prices"):
+        logger.info(f"店舗 [{store_code}] 料金表画像に変更なし (MD5: {img_hash[:8]}...) -> OCRスキップ（キャッシュ再利用・API消費0回）")
+        return cached_entry["prices"]
+
+    logger.info(f"店舗 [{store_code}] 料金表画像の新着/変更を検知！ (MD5: {img_hash[:8]}...) -> Cloud Vision API 解析を実行: {img_url}")
+    full_ann, text = ocr_image_bytes(img_bytes)
     if not full_ann or not text:
+        # OCR失敗時でも前回のキャッシュがあれば安全にフォールバック
+        if cached_entry and cached_entry.get("prices"):
+            logger.warning(f"店舗 [{store_code}] OCR失敗のため前回のキャッシュを暫定利用します")
+            return cached_entry["prices"]
         return None
 
+    prices = None
     # 1. 幾何学的パーサー
     try:
         geo_prices = parse_prices_geometric(full_ann, text)
         valid_keys = [k for k in geo_prices if k.startswith("private_") and geo_prices[k]]
         if len(valid_keys) >= 4:
             logger.info(f"店舗 [{store_code}] 幾何学的OCR抽出成功 ({len(valid_keys)} 項目取得)")
-            return geo_prices
+            prices = geo_prices
     except Exception as e:
         logger.warning(f"店舗 [{store_code}] の幾何学的OCR解析で例外発生: {e}")
 
     # 2. フォールバック: テキストパーサー
-    prices = parse_prices_from_ocr(text)
+    if not prices:
+        prices = parse_prices_from_ocr(text)
+
+    # キャッシュを更新して保存
+    if prices:
+        cache[str(store_code)] = {
+            "hash": img_hash,
+            "image_url": img_url,
+            "prices": prices,
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        save_ocr_cache(cache)
+
     return prices
 
