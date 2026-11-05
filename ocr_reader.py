@@ -17,29 +17,67 @@ import config
 
 logger = logging.getLogger(__name__)
 
+import threading
+
 # トークンのキャッシュ
 _cached_token = None
 
 # OCR解析結果のハッシュキャッシュ
 CACHE_FILE = Path(__file__).resolve().parent / "ocr_cache.json"
+_cache_lock = threading.Lock()
+_global_cache = None
 
 def load_ocr_cache() -> Dict[str, Any]:
-    """料金表画像のハッシュキャッシュをロードする"""
-    if CACHE_FILE.exists():
-        try:
-            with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            logger.warning(f"OCRキャッシュ読み込み失敗: {e}")
-    return {}
+    """料金表画像のハッシュキャッシュをロードする（スレッドセーフ）"""
+    global _global_cache
+    with _cache_lock:
+        if _global_cache is not None:
+            return _global_cache
+        if CACHE_FILE.exists():
+            try:
+                with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                    _global_cache = json.load(f)
+                    return _global_cache
+            except Exception as e:
+                logger.warning(f"OCRキャッシュ読み込み失敗: {e}")
+        _global_cache = {}
+        return _global_cache
 
 def save_ocr_cache(cache: Dict[str, Any]):
-    """料金表画像のハッシュキャッシュを保存する"""
-    try:
-        with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(cache, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.warning(f"OCRキャッシュ保存失敗: {e}")
+    """料金表画像のハッシュキャッシュを保存する（スレッドセーフ）"""
+    global _global_cache
+    with _cache_lock:
+        _global_cache = cache
+        try:
+            with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(_global_cache, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning(f"OCRキャッシュ保存失敗: {e}")
+
+def update_ocr_cache_entry(store_code: str, img_hash: str, img_url: str, prices: Dict[str, Any]):
+    """単一店舗のOCRキャッシュをアトミックに更新・永続化する（スレッドセーフ）"""
+    global _global_cache
+    with _cache_lock:
+        if _global_cache is None:
+            if CACHE_FILE.exists():
+                try:
+                    with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                        _global_cache = json.load(f)
+                except Exception:
+                    _global_cache = {}
+            else:
+                _global_cache = {}
+        _global_cache[str(store_code)] = {
+            "hash": img_hash,
+            "image_url": img_url,
+            "prices": prices,
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        try:
+            with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(_global_cache, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning(f"OCRキャッシュ保存失敗: {e}")
 
 def fetch_price_image_bytes(store_code: str) -> Tuple[Optional[str], Optional[bytes], Optional[str]]:
     """
@@ -578,15 +616,9 @@ def get_store_price_from_image(store_code: str) -> Optional[Dict[str, Any]]:
     if not prices:
         prices = parse_prices_from_ocr(text)
 
-    # キャッシュを更新して保存
+    # キャッシュを更新して保存（スレッドセーフ）
     if prices:
-        cache[str(store_code)] = {
-            "hash": img_hash,
-            "image_url": img_url,
-            "prices": prices,
-            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        save_ocr_cache(cache)
+        update_ocr_cache_entry(str(store_code), img_hash, img_url, prices)
 
     return prices
 
