@@ -1159,10 +1159,25 @@ function submitModalToGoogleForm() {
         const searchInput = document.getElementById('searchInput');
         if (searchInput && searchInput.value.trim() !== '') {
           searchInput.value = '';
+          updateClearBtnVisibility();
+          needRerender = true;
+        }
+        const checkedCbs = Array.from(document.querySelectorAll('.filter-cb:checked'));
+        if (checkedCbs.length > 0) {
+          checkedCbs.forEach(cb => { cb.checked = false; });
+          const activeBadge = document.getElementById('filterActiveBadge');
+          if (activeBadge) activeBadge.classList.add('hidden');
           needRerender = true;
         }
         if (needRerender) {
           renderStores();
+        }
+
+        // 対象店舗が段階的レンダリングの未描画領域（31件目以降）にある場合、その店舗の位置まで一気に追加描画する
+        const targetIndex = currentFilteredStores.findIndex(s => String(s['店舗コード']) === String(storeCode));
+        if (targetIndex !== -1 && targetIndex >= renderedCount) {
+          const neededCount = (targetIndex + 1) - renderedCount;
+          appendMoreStores(neededCount + 5);
         }
       }
 
