@@ -3,7 +3,7 @@ import logging
 import re
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 import config
@@ -79,7 +79,9 @@ def _parse_store_price_record(records: List[Dict[str, Any]]) -> Optional[Dict[st
         except Exception:
             return None
 
-    now = datetime.now()
+    # GitHub Actions (UTC環境) でも日本時間(JST)基準で適用日時を判定する
+    JST = timezone(timedelta(hours=9))
+    now = datetime.now(JST).replace(tzinfo=None)
     default_record = None
     matched_record = None
 

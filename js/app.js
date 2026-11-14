@@ -1270,14 +1270,27 @@ function submitModalToGoogleForm() {
             groupBadge = `<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.2 rounded border border-amber-300">値上げ${groupInc} / 値下げ${groupDec}</span>`;
           }
 
+          const formatHistVal = (v) => {
+            if (v === '-' || v === '' || v === null || v === undefined) return '提供なし(-)';
+            const n = Number(v);
+            return isNaN(n) ? String(v) : `${n.toLocaleString()}円`;
+          };
+
           const rowsHtml = items.map(d => {
             const isMinus = (d.diff || '').startsWith('-');
-            const diffColor = isMinus ? 'text-emerald-700 bg-emerald-50 font-bold' : 'text-red-700 bg-red-50 font-bold';
+            const isAbolish = d.diff === '廃止';
+            const isNew = d.diff === '新設' || (d.diff || '').includes('NEW');
+            let diffColor = 'text-red-700 bg-red-50 font-bold';
+            if (isMinus) diffColor = 'text-emerald-700 bg-emerald-50 font-bold';
+            else if (isAbolish) diffColor = 'text-slate-700 bg-slate-200 font-bold';
+            else if (isNew) diffColor = 'text-blue-700 bg-blue-50 font-bold';
+            else if (d.diff === '条件変更') diffColor = 'text-amber-800 bg-amber-100 font-bold';
+
             return `
               <tr class="hover:bg-slate-50 transition border-b border-slate-100">
                 <td class="py-2 px-2.5 font-medium text-slate-800">${d.item}</td>
-                <td class="py-2 px-2 text-right text-slate-400 line-through">${Number(d.before).toLocaleString()}円</td>
-                <td class="py-2 px-2 text-right font-bold text-slate-900">${Number(d.after).toLocaleString()}円</td>
+                <td class="py-2 px-2 text-right text-slate-400 line-through">${formatHistVal(d.before)}</td>
+                <td class="py-2 px-2 text-right font-bold text-slate-900">${formatHistVal(d.after)}</td>
                 <td class="py-2 px-2.5 text-right">
                   <span class="inline-block px-1.5 py-0.2 rounded text-[11px] ${diffColor}">${d.diff}</span>
                 </td>
@@ -1895,6 +1908,11 @@ function submitModalToGoogleForm() {
         const hasDec = decDiffs.length > 0;
 
         // 改定サマリーバナー
+        const formatBannerVal = (v) => {
+          if (v === '-' || v === '' || v === null || v === undefined) return '-';
+          const n = Number(v);
+          return isNaN(n) ? String(v) : `${n.toLocaleString()}円`;
+        };
         let diffBanner = '';
         if (hasDiff) {
           const changeDateStr = s['last_price_change_date'] ? `${s['last_price_change_date']}検知 / ` : '';
@@ -1909,7 +1927,7 @@ function submitModalToGoogleForm() {
                 </div>
                 <div class="flex items-center gap-2">
                   <div class="text-[10px] sm:text-[11px] text-emerald-700 truncate max-w-[160px] sm:max-w-none hidden sm:block">
-                    ${decDiffs.map(d => `${d.item} ${Number(d.before).toLocaleString()}円→${Number(d.after).toLocaleString()}円 (${d.diff})`).slice(0, 2).join(' / ')}${decDiffs.length > 2 ? ' ...他' : ''}
+                    ${decDiffs.map(d => `${d.item} ${formatBannerVal(d.before)}→${formatBannerVal(d.after)} (${d.diff})`).slice(0, 2).join(' / ')}${decDiffs.length > 2 ? ' ...他' : ''}
                   </div>
                   <span class="text-[10px] sm:text-[11px] text-emerald-800 font-bold group-hover:underline flex items-center gap-0.5 whitespace-nowrap">
                     内訳 <i class="fa-solid fa-chevron-right text-[9px]"></i>
@@ -1918,16 +1936,16 @@ function submitModalToGoogleForm() {
               </div>
             `;
           } else if (hasInc && !hasDec) {
-            // 値上げのみ
+            // 値上げ・改定のみ
             diffBanner = `
               <div onclick="openStoreHistoryModal('${code}')" class="cursor-pointer bg-red-50 hover:bg-red-100/70 border border-red-200 rounded-lg px-2.5 py-1.5 text-xs text-red-800 flex items-center justify-between transition shadow-2xs group">
                 <div class="flex items-center gap-1.5 font-bold text-[11px] sm:text-xs">
                   <i class="fa-solid fa-arrow-trend-up text-red-600"></i>
-                  <span>直近で価格改定あり (${changeDateStr}${incDiffs.length}項目値上げ)</span>
+                  <span>直近で価格改定あり (${changeDateStr}${incDiffs.length}項目改定)</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <div class="text-[10px] sm:text-[11px] text-red-600 truncate max-w-[160px] sm:max-w-none hidden sm:block">
-                    ${incDiffs.map(d => `${d.item} ${Number(d.before).toLocaleString()}円→${Number(d.after).toLocaleString()}円`).slice(0, 2).join(' / ')}${incDiffs.length > 2 ? ' ...他' : ''}
+                    ${incDiffs.map(d => `${d.item} ${formatBannerVal(d.before)}→${formatBannerVal(d.after)} (${d.diff})`).slice(0, 2).join(' / ')}${incDiffs.length > 2 ? ' ...他' : ''}
                   </div>
                   <span class="text-[10px] sm:text-[11px] text-red-800 font-bold group-hover:underline flex items-center gap-0.5 whitespace-nowrap">
                     内訳 <i class="fa-solid fa-chevron-right text-[9px]"></i>
@@ -1941,11 +1959,11 @@ function submitModalToGoogleForm() {
               <div onclick="openStoreHistoryModal('${code}')" class="cursor-pointer bg-amber-50 hover:bg-amber-100/70 border border-amber-200 rounded-lg px-2.5 py-1.5 text-xs text-amber-900 flex items-center justify-between transition shadow-2xs group">
                 <div class="flex items-center gap-1.5 font-bold text-[11px] sm:text-xs">
                   <i class="fa-solid fa-arrows-up-down text-amber-600"></i>
-                  <span>直近で価格改定あり (${changeDateStr}値上げ${incDiffs.length} / 値下げ${decDiffs.length})</span>
+                  <span>直近で価格改定あり (${changeDateStr}改定${incDiffs.length} / 値下げ${decDiffs.length})</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <div class="text-[10px] sm:text-[11px] text-amber-700 truncate max-w-[160px] sm:max-w-none hidden sm:block">
-                    ${diffs.map(d => `${d.item} ${Number(d.before).toLocaleString()}円→${Number(d.after).toLocaleString()}円 (${d.diff})`).slice(0, 2).join(' / ')}${diffs.length > 2 ? ' ...他' : ''}
+                    ${diffs.map(d => `${d.item} ${formatBannerVal(d.before)}→${formatBannerVal(d.after)} (${d.diff})`).slice(0, 2).join(' / ')}${diffs.length > 2 ? ' ...他' : ''}
                   </div>
                   <span class="text-[10px] sm:text-[11px] text-amber-900 font-bold group-hover:underline flex items-center gap-0.5 whitespace-nowrap">
                     内訳 <i class="fa-solid fa-chevron-right text-[9px]"></i>

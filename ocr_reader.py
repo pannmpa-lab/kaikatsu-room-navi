@@ -1,5 +1,5 @@
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import base64
 import json
@@ -71,7 +71,7 @@ def update_ocr_cache_entry(store_code: str, img_hash: str, img_url: str, prices:
             "hash": img_hash,
             "image_url": img_url,
             "prices": prices,
-            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "updated_at": datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
         }
         try:
             with open(CACHE_FILE, "w", encoding="utf-8") as f:

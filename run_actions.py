@@ -1,8 +1,9 @@
 import os
+import re
 import json
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 import config
 import scraper
@@ -84,7 +85,10 @@ def main():
             for k in price_keys:
                 cur_v = cur.get(k)
                 prev_v = prev.get(k)
-                if cur_v not in [None, "", "-"] and prev_v not in [None, "", "-"]:
+                cur_valid = cur_v not in [None, "", "-"]
+                prev_valid = prev_v not in [None, "", "-"]
+
+                if cur_valid and prev_valid:
                     try:
                         cur_int = int(cur_v)
                         prev_int = int(prev_v)
@@ -109,6 +113,70 @@ def main():
                             })
                     except (ValueError, TypeError):
                         pass
+                elif prev_valid and not cur_valid:
+                    # 従来提供されていたパックの廃止
+                    try:
+                        prev_int = int(prev_v)
+                        all_diffs.append({
+                            "店舗コード": code,
+                            "都道府県": cur.get("都道府県", ""),
+                            "店舗名": cur.get("店舗名", ""),
+                            "変更項目": k,
+                            "改定前": prev_int,
+                            "改定後": "-",
+                            "差額": "廃止"
+                        })
+                        store_diffs.append({
+                            "item": k,
+                            "before": prev_int,
+                            "after": "-",
+                            "diff": "廃止"
+                        })
+                    except (ValueError, TypeError):
+                        pass
+                elif not prev_valid and cur_valid:
+                    # 新規パックの新設
+                    try:
+                        cur_int = int(cur_v)
+                        all_diffs.append({
+                            "店舗コード": code,
+                            "都道府県": cur.get("都道府県", ""),
+                            "店舗名": cur.get("店舗名", ""),
+                            "変更項目": k,
+                            "改定前": "-",
+                            "改定後": cur_int,
+                            "差額": "新設"
+                        })
+                        store_diffs.append({
+                            "item": k,
+                            "before": "-",
+                            "after": cur_int,
+                            "diff": "新設"
+                        })
+                    except (ValueError, TypeError):
+                        pass
+
+            # 週末料金適用条件（金・祝前日追加等）の正規化比較検知
+            prev_note = str(prev.get("週末料金注記") or "").strip()
+            cur_note = str(cur.get("週末料金注記") or "").strip()
+            norm_prev = re.sub(r"[・\s、。~～]", "", prev_note)
+            norm_cur = re.sub(r"[・\s、。~～]", "", cur_note)
+            if norm_prev and norm_cur and norm_prev != norm_cur:
+                all_diffs.append({
+                    "店舗コード": code,
+                    "都道府県": cur.get("都道府県", ""),
+                    "店舗名": cur.get("店舗名", ""),
+                    "変更項目": "週末料金条件",
+                    "改定前": prev_note,
+                    "改定後": cur_note,
+                    "差額": "条件変更"
+                })
+                store_diffs.append({
+                    "item": "週末料金条件",
+                    "before": prev_note,
+                    "after": cur_note,
+                    "diff": "条件変更"
+                })
 
             if store_diffs:
                 diff_by_store[code] = store_diffs
@@ -118,8 +186,10 @@ def main():
         else:
             logger.info("料金の改定はありませんでした。")
 
-        # 5. 各店舗データに diffs ＆ 最終改定日情報を埋め込んで stores.json を生成
-        today_str = datetime.now().strftime("%Y/%m/%d")
+        # 5. 各店舗データに diffs ＆ 最終改定日情報を埋め込んで stores.json を生成（JST基準）
+        JST = timezone(timedelta(hours=9))
+        now_jst = datetime.now(JST).replace(tzinfo=None)
+        today_str = now_jst.strftime("%Y/%m/%d")
         RECENT_DAYS_LIMIT = 30  # 直近の基準（30日以内）
 
         for cur in current_data:
@@ -142,7 +212,7 @@ def main():
             if cur["last_price_change_date"] and len(cur.get("diffs", [])) > 0:
                 try:
                     change_dt = datetime.strptime(cur["last_price_change_date"], "%Y/%m/%d")
-                    diff_days = (datetime.now() - change_dt).days
+                    diff_days = (now_jst - change_dt).days
                     if 0 <= diff_days <= RECENT_DAYS_LIMIT:
                         is_recent = True
                 except Exception:
