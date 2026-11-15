@@ -930,9 +930,49 @@ function submitModalToGoogleForm() {
 
     function openPriceUpdatesModal() {
       currentUpdatesFilter = 'all';
+      const prefSelect = document.getElementById('updatesPrefFilter');
+      if (prefSelect) prefSelect.value = '';
+      const searchInput = document.getElementById('updatesSearchInput');
+      if (searchInput) searchInput.value = '';
+      populateUpdatesPrefFilter();
       updateFilterButtonsUI();
       renderPriceUpdatesContent();
       toggleModal('priceUpdatesModal');
+    }
+
+    function populateUpdatesPrefFilter() {
+      const prefSelect = document.getElementById('updatesPrefFilter');
+      if (!prefSelect) return;
+
+      const storesWithDiff = allStores.filter(s => (s.diffs && s.diffs.length > 0) || s.has_diff);
+      const prefCounts = {};
+      storesWithDiff.forEach(s => {
+        const pref = s['都道府県'];
+        if (pref) prefCounts[pref] = (prefCounts[pref] || 0) + 1;
+      });
+
+      const orderedPrefs = typeof REGIONS !== 'undefined' ? REGIONS.flatMap(r => r.prefs) : [];
+      const activePrefs = [
+        ...orderedPrefs.filter(p => prefCounts[p]),
+        ...Object.keys(prefCounts).filter(p => !orderedPrefs.includes(p)).sort()
+      ];
+
+      const currentVal = prefSelect.value;
+      prefSelect.innerHTML = `<option value="">全都道府県 (${storesWithDiff.length}件)</option>` +
+        activePrefs.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)} (${prefCounts[p]}件)</option>`).join('');
+      if (currentVal && prefCounts[currentVal]) {
+        prefSelect.value = currentVal;
+      }
+    }
+
+    function resetUpdatesModalFilters() {
+      currentUpdatesFilter = 'all';
+      const prefSelect = document.getElementById('updatesPrefFilter');
+      if (prefSelect) prefSelect.value = '';
+      const searchInput = document.getElementById('updatesSearchInput');
+      if (searchInput) searchInput.value = '';
+      updateFilterButtonsUI();
+      renderPriceUpdatesContent();
     }
 
     function filterUpdatesModal(type) {
@@ -975,13 +1015,22 @@ function submitModalToGoogleForm() {
       // diffs を持っている店舗を抽出
       const storesWithDiff = allStores.filter(s => (s.diffs && s.diffs.length > 0) || s.has_diff);
 
+      const selectedPref = document.getElementById('updatesPrefFilter')?.value || '';
+      const rawQuery = (document.getElementById('updatesSearchInput')?.value || '').trim().toLowerCase();
+      const queryTokens = rawQuery ? rawQuery.split(/[\s\u3000]+/).filter(Boolean) : [];
+
       // フィルター適用
       const filtered = storesWithDiff.filter(s => {
         const diffs = s.diffs || [];
         const hasDec = diffs.some(d => (d.diff || '').startsWith('-'));
         const hasInc = diffs.some(d => !(d.diff || '').startsWith('-'));
-        if (currentUpdatesFilter === 'decrease') return hasDec;
-        if (currentUpdatesFilter === 'increase') return hasInc;
+        if (currentUpdatesFilter === 'decrease' && !hasDec) return false;
+        if (currentUpdatesFilter === 'increase' && !hasInc) return false;
+        if (selectedPref && s['都道府県'] !== selectedPref) return false;
+        if (queryTokens.length > 0) {
+          const target = `${s['店舗名'] || ''} ${s['都道府県'] || ''} ${s['市区町村'] || ''} ${s['店舗コード'] || ''}`.toLowerCase();
+          if (!queryTokens.every(tok => target.includes(tok))) return false;
+        }
         return true;
       });
 
@@ -994,7 +1043,7 @@ function submitModalToGoogleForm() {
 
       countEl.textContent = filtered.length;
 
-      if (filtered.length === 0) {
+      if (storesWithDiff.length === 0) {
         container.innerHTML = `
           <div class="p-6 sm:p-8 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-2">
             <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-2 text-xl">
@@ -1007,6 +1056,22 @@ function submitModalToGoogleForm() {
             <p class="text-[11px] text-slate-400">
               明日以降、快活CLUB公式HPで料金変更（値上げ・値下げ）が検知され次第、ここにリアルタイムで速報が自動蓄積されます。
             </p>
+          </div>
+        `;
+        return;
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="p-6 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-2.5">
+            <div class="w-10 h-10 bg-slate-200 text-slate-500 rounded-full flex items-center justify-center mx-auto text-base">
+              <i class="fa-solid fa-filter-circle-xmark"></i>
+            </div>
+            <div class="font-bold text-slate-700 text-sm">条件に一致する改定店舗が見つかりませんでした</div>
+            <p class="text-xs text-slate-500">都道府県やキーワード、値上げ/値下げフィルターを変更してお試しください。</p>
+            <button type="button" onclick="resetUpdatesModalFilters()" class="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition">
+              絞り込みをリセット
+            </button>
           </div>
         `;
         return;

@@ -507,15 +507,29 @@
       </div>
 
       <!-- サブバー（フィルター＆件数） -->
-      <div class="py-2.5 px-3 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-2 flex-shrink-0 text-xs">
-        <div class="text-slate-600 font-medium flex items-center gap-2 flex-wrap">
-          <span>改定検知: <span id="priceUpdatesCount" class="font-bold text-orange-600 text-sm">0</span> 店舗</span>
-          <span class="text-[10px] text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded">※ 改定監視: 2026/10/03 より開始</span>
+      <div class="py-2.5 px-3 bg-slate-50 border-b border-slate-200 flex flex-col gap-2 flex-shrink-0 text-xs">
+        <div class="flex flex-wrap justify-between items-center gap-2">
+          <div class="text-slate-600 font-medium flex items-center gap-2 flex-wrap">
+            <span>改定検知: <span id="priceUpdatesCount" class="font-bold text-orange-600 text-sm">0</span> 店舗</span>
+            <span class="text-[10px] text-slate-400 bg-white border border-slate-200 px-1.5 py-0.5 rounded">※ 改定監視: 2026/10/03 より開始</span>
+          </div>
+          <div class="flex items-center gap-1 text-[11px]">
+            <button type="button" onclick="filterUpdatesModal('all')" id="btnUpdatesAll" class="px-2.5 py-1 rounded-full border bg-orange-600 text-white border-orange-600 font-bold transition">すべて</button>
+            <button type="button" onclick="filterUpdatesModal('decrease')" id="btnUpdatesDec" class="px-2.5 py-1 rounded-full border border-slate-300 bg-white text-emerald-700 hover:bg-emerald-50 transition">🎉 値下げのみ</button>
+            <button type="button" onclick="filterUpdatesModal('increase')" id="btnUpdatesInc" class="px-2.5 py-1 rounded-full border border-slate-300 bg-white text-red-700 hover:bg-red-50 transition">🔺 値上げのみ</button>
+          </div>
         </div>
-        <div class="flex items-center gap-1 text-[11px]">
-          <button type="button" onclick="filterUpdatesModal('all')" id="btnUpdatesAll" class="px-2.5 py-1 rounded-full border bg-orange-600 text-white border-orange-600 font-bold transition">すべて</button>
-          <button type="button" onclick="filterUpdatesModal('decrease')" id="btnUpdatesDec" class="px-2.5 py-1 rounded-full border border-slate-300 bg-white text-emerald-700 hover:bg-emerald-50 transition">🎉 値下げのみ</button>
-          <button type="button" onclick="filterUpdatesModal('increase')" id="btnUpdatesInc" class="px-2.5 py-1 rounded-full border border-slate-300 bg-white text-red-700 hover:bg-red-50 transition">🔺 値上げのみ</button>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <select id="updatesPrefFilter" onchange="renderPriceUpdatesContent()" class="sm:w-44 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500">
+            <option value="">全都道府県</option>
+          </select>
+          <div class="relative flex-1">
+            <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[11px]"></i>
+            <input type="text" id="updatesSearchInput" oninput="renderPriceUpdatesContent()" placeholder="店舗名・市区町村で絞り込み..." class="w-full bg-white border border-slate-300 rounded-lg pl-7 pr-7 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-500">
+            <button type="button" onclick="const el=document.getElementById('updatesSearchInput'); if(el){el.value=''; renderPriceUpdatesContent();}" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5" title="検索をクリア">
+              <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -575,6 +589,6 @@
   </div>
 
   <!-- スクリプト -->
-  <script src="js/app.js?v=20261114_02"></script>
+  <script src="js/app.js?v=20261115_01"></script>
 </body>
 </html>
