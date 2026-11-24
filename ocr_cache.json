@@ -2660,10 +2660,10 @@
     "updated_at": "2026-11-17 08:26:11"
   },
   "20534": {
-    "hash": "30162075c2515f78d54f0201cf72d311",
-    "image_url": "https://www.kaikatsu.jp/shop/images/2026/20534_1116price.png",
+    "hash": "b8048dd523fdd1c2c9792b56fd5ad656",
+    "image_url": "https://www.kaikatsu.jp/shop/images/2026/20534_1124price.png",
     "prices": {
-      "annotation_weekend_1": "土日祝日はパック料金に220円が加算されます。",
+      "annotation_weekend_1": "土日・祝日はパック料金に220円が加算されます。",
       "private_weekday_basic_taxfee": 360,
       "private_weekend_basic_taxfee": 360,
       "private_weekday_10_taxfee": 120,
@@ -2687,7 +2687,7 @@
       "private_weekday_night8_taxfee": 2350,
       "private_weekend_night8_taxfee": 2570
     },
-    "updated_at": "2026-11-17 08:26:11"
+    "updated_at": "2026-11-25 08:31:39"
   },
   "20899": {
     "hash": "42ffb22e0ce355a47f3387e54b88a3bc",
