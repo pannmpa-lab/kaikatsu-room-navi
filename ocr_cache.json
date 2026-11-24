@@ -568,36 +568,22 @@
     "updated_at": "2026-11-05 19:09:57"
   },
   "20423": {
-    "hash": "1527665e11a019c610d5ac1e7340a6a0",
-    "image_url": "https://www.kaikatsu.jp/shop/images/2026/20423_20260907.png",
+    "hash": "c71049a7bf2466754f51c263344d9d12",
+    "image_url": "https://www.kaikatsu.jp/shop/images/2026/hukuiekimae_1124_02.png",
     "prices": {
+      "annotation_weekend_1": "金・祝前日PM6:00~と土日・祝日はパック料金に220円が加算されます。",
       "private_weekday_basic_taxfee": 310,
-      "private_weekday_10_taxfee": 120,
-      "private_weekday_3h_taxfee": 1310,
-      "private_weekday_6h_taxfee": 1310,
+      "private_weekend_basic_taxfee": 310,
+      "private_weekday_10_taxfee": 110,
+      "private_weekend_10_taxfee": 110,
+      "private_weekday_3h_taxfee": 990,
+      "private_weekend_3h_taxfee": 1210,
+      "private_weekday_6h_taxfee": 990,
+      "private_weekend_6h_taxfee": 1210,
       "private_weekday_9h_taxfee": 2620,
-      "private_weekday_12h_taxfee": 2620,
-      "private_weekday_15h_taxfee": 2620,
-      "private_weekday_18h_taxfee": 3780,
-      "private_weekday_21h_taxfee": 3780,
-      "private_weekday_24h_taxfee": 3780,
-      "private_weekday_night8_taxfee": "-",
-      "private_weekday_night12_taxfee": "-",
-      "private_weekend_basic_taxfee": 530,
-      "private_weekend_10_taxfee": 340,
-      "private_weekend_3h_taxfee": 1530,
-      "private_weekend_6h_taxfee": 1530,
-      "private_weekend_9h_taxfee": 2840,
-      "private_weekend_12h_taxfee": 2840,
-      "private_weekend_15h_taxfee": 2840,
-      "private_weekend_18h_taxfee": 4000,
-      "private_weekend_21h_taxfee": 4000,
-      "private_weekend_24h_taxfee": 4000,
-      "private_weekend_night8_taxfee": "-",
-      "private_weekend_night12_taxfee": "-",
-      "annotation_weekend_1": "土日・祝日はパック料金220円が加算されます。"
+      "private_weekend_9h_taxfee": 2840
     },
-    "updated_at": "2026-11-05 19:09:58"
+    "updated_at": "2026-11-24 10:43:49"
   },
   "20705": {
     "hash": "6a777659e4e7810a3acbbd02570952d0",
@@ -2816,10 +2802,10 @@
     "updated_at": "2026-11-17 08:26:13"
   },
   "20600": {
-    "hash": "5f8c5c14e143ca2c41b22d6566eaafc0",
-    "image_url": "https://www.kaikatsu.jp/shop/images/2026/20600_1116price.png",
+    "hash": "bc5baa3ae641be29c377315fb60eaa76",
+    "image_url": "https://www.kaikatsu.jp/shop/images/2026/20600_1124price.png",
     "prices": {
-      "annotation_weekend_1": "金・祝前日PM6:00~と土日・祝日はパック料金に440円が加算されます。",
+      "annotation_weekend_1": "金・祝前日PM6:00~ と土日・祝日はパック料金に440円が加算されます。",
       "private_weekday_basic_taxfee": 860,
       "private_weekend_basic_taxfee": 860,
       "private_weekday_10_taxfee": 130,
@@ -2843,7 +2829,7 @@
       "private_weekday_night8_taxfee": 2700,
       "private_weekend_night8_taxfee": 3140
     },
-    "updated_at": "2026-11-17 08:26:13"
+    "updated_at": "2026-11-24 10:43:52"
   },
   "20718": {
     "hash": "581ad934757df40b8c18783d1e423c0e",
@@ -2932,10 +2918,10 @@
     "updated_at": "2026-11-17 08:26:14"
   },
   "20593": {
-    "hash": "beb48d5cd704b2e3ea0c26c14fce7561",
-    "image_url": "https://www.kaikatsu.jp/shop/images/2026/20593_1116price.png",
+    "hash": "8a9e8d54493f1e39ba08cf86dd390553",
+    "image_url": "https://www.kaikatsu.jp/shop/images/2026/20593_1124price.png",
     "prices": {
-      "annotation_weekend_1": "土日祝日はパック料金に220円が加算されます。",
+      "annotation_weekend_1": "土日・祝日はパック料金に220円が加算されます。",
       "private_weekday_basic_taxfee": 390,
       "private_weekend_basic_taxfee": 390,
       "private_weekday_10_taxfee": 130,
@@ -2959,7 +2945,7 @@
       "private_weekday_night8_taxfee": 2580,
       "private_weekend_night8_taxfee": 2800
     },
-    "updated_at": "2026-11-17 08:26:14"
+    "updated_at": "2026-11-24 10:43:52"
   },
   "20561": {
     "hash": "abe779845af3dd3e248c0ccd298b2064",
@@ -3478,59 +3464,59 @@
     "updated_at": "2026-11-18 07:28:59"
   },
   "20969": {
-    "hash": "5f754753dc04fc390cf688ef0a121dc9",
-    "image_url": "https://www.kaikatsu.jp/shop/images/2026/20967_1120price_1.png",
+    "hash": "46237067dd9dc46d98c8a965a7459c05",
+    "image_url": "https://www.kaikatsu.jp/shop/images/2026/20969_1124price.png",
     "prices": {
       "annotation_weekend_1": "金・祝前日PM6:00~と土日・祝日はパック料金に330円が加算されます。",
-      "private_weekday_basic_taxfee": 390,
-      "private_weekend_basic_taxfee": 390,
-      "private_weekday_10_taxfee": 130,
-      "private_weekend_10_taxfee": 130,
-      "private_weekday_3h_taxfee": 1440,
-      "private_weekend_3h_taxfee": 1770,
-      "private_weekday_6h_taxfee": 2110,
-      "private_weekend_6h_taxfee": 2440,
-      "private_weekday_9h_taxfee": 2770,
-      "private_weekend_9h_taxfee": 3100,
-      "private_weekday_12h_taxfee": 3300,
-      "private_weekend_12h_taxfee": 3630,
-      "private_weekday_15h_taxfee": 4100,
-      "private_weekend_15h_taxfee": 4430,
-      "private_weekday_18h_taxfee": 4880,
-      "private_weekend_18h_taxfee": 5210,
-      "private_weekday_21h_taxfee": 5390,
-      "private_weekend_21h_taxfee": 5720,
-      "private_weekday_24h_taxfee": 5680,
-      "private_weekend_24h_taxfee": 6010
+      "private_weekday_basic_taxfee": 430,
+      "private_weekend_basic_taxfee": 430,
+      "private_weekday_10_taxfee": 140,
+      "private_weekend_10_taxfee": 140,
+      "private_weekday_3h_taxfee": 1560,
+      "private_weekend_3h_taxfee": 1890,
+      "private_weekday_6h_taxfee": 2570,
+      "private_weekend_6h_taxfee": 2900,
+      "private_weekday_9h_taxfee": 3430,
+      "private_weekend_9h_taxfee": 3760,
+      "private_weekday_12h_taxfee": 4150,
+      "private_weekend_12h_taxfee": 4480,
+      "private_weekday_15h_taxfee": 5170,
+      "private_weekend_15h_taxfee": 5500,
+      "private_weekday_18h_taxfee": 5990,
+      "private_weekend_18h_taxfee": 6320,
+      "private_weekday_21h_taxfee": 6680,
+      "private_weekend_21h_taxfee": 7010,
+      "private_weekday_24h_taxfee": 6880,
+      "private_weekend_24h_taxfee": 7210
     },
-    "updated_at": "2026-11-21 06:52:24"
+    "updated_at": "2026-11-24 10:43:42"
   },
   "20967": {
-    "hash": "5f754753dc04fc390cf688ef0a121dc9",
-    "image_url": "https://www.kaikatsu.jp/shop/images/2026/20967_1120price.png",
+    "hash": "46237067dd9dc46d98c8a965a7459c05",
+    "image_url": "https://www.kaikatsu.jp/shop/images/2026/20967_1124price.png",
     "prices": {
       "annotation_weekend_1": "金・祝前日PM6:00~と土日・祝日はパック料金に330円が加算されます。",
-      "private_weekday_basic_taxfee": 390,
-      "private_weekend_basic_taxfee": 390,
-      "private_weekday_10_taxfee": 130,
-      "private_weekend_10_taxfee": 130,
-      "private_weekday_3h_taxfee": 1440,
-      "private_weekend_3h_taxfee": 1770,
-      "private_weekday_6h_taxfee": 2110,
-      "private_weekend_6h_taxfee": 2440,
-      "private_weekday_9h_taxfee": 2770,
-      "private_weekend_9h_taxfee": 3100,
-      "private_weekday_12h_taxfee": 3300,
-      "private_weekend_12h_taxfee": 3630,
-      "private_weekday_15h_taxfee": 4100,
-      "private_weekend_15h_taxfee": 4430,
-      "private_weekday_18h_taxfee": 4880,
-      "private_weekend_18h_taxfee": 5210,
-      "private_weekday_21h_taxfee": 5390,
-      "private_weekend_21h_taxfee": 5720,
-      "private_weekday_24h_taxfee": 5680,
-      "private_weekend_24h_taxfee": 6010
+      "private_weekday_basic_taxfee": 430,
+      "private_weekend_basic_taxfee": 430,
+      "private_weekday_10_taxfee": 140,
+      "private_weekend_10_taxfee": 140,
+      "private_weekday_3h_taxfee": 1560,
+      "private_weekend_3h_taxfee": 1890,
+      "private_weekday_6h_taxfee": 2570,
+      "private_weekend_6h_taxfee": 2900,
+      "private_weekday_9h_taxfee": 3430,
+      "private_weekend_9h_taxfee": 3760,
+      "private_weekday_12h_taxfee": 4150,
+      "private_weekend_12h_taxfee": 4480,
+      "private_weekday_15h_taxfee": 5170,
+      "private_weekend_15h_taxfee": 5500,
+      "private_weekday_18h_taxfee": 5990,
+      "private_weekend_18h_taxfee": 6320,
+      "private_weekday_21h_taxfee": 6680,
+      "private_weekend_21h_taxfee": 7010,
+      "private_weekday_24h_taxfee": 6880,
+      "private_weekend_24h_taxfee": 7210
     },
-    "updated_at": "2026-11-21 06:52:24"
+    "updated_at": "2026-11-24 10:43:42"
   }
 }
